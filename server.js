@@ -4,42 +4,33 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
-
-/* =====================================================
-   BASIC SETUP
-===================================================== */
+app.use(cors());
 app.use(express.json());
-
-app.use(cors({
-  origin: "https://joynhappy.shop",
-  methods: ["GET", "POST"],
-  credentials: true
-}));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* =====================================================
-   IFRAME ALLOW (CSP ONLY – CORRECT WAY)
+   ALLOW IFRAME EMBEDDING
 ===================================================== */
 app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "frame-ancestors https://joynhappy.shop *"
-  );
+  res.setHeader("X-Frame-Options", "ALLOWALL");
+  res.setHeader("Content-Security-Policy", "frame-ancestors *");
   next();
 });
 
 /* =====================================================
    COUNTRY BLOCK (CLOUDFLARE)
 ===================================================== */
-const ALLOWED_COUNTRIES = ["JP"];
+const ALLOWED_COUNTRIES = ["JP"]; // Allow JP + yourself for testing
 
 app.use((req, res, next) => {
-  const country = (req.headers["cf-ipcountry"] || "").toUpperCase();
+  const country = (req.headers["cf-ipcountry"] || "UNKNOWN").toUpperCase();
 
-  // Allow if Cloudflare header missing (local / test)
-  if (!country) return next();
+  if (country === "UNKNOWN") {
+    console.log("⚠️ Cloudflare country header missing → allowing request.");
+    return next();
+  }
 
   if (!ALLOWED_COUNTRIES.includes(country)) {
     return res.status(403).send("Access blocked by country");
@@ -49,21 +40,12 @@ app.use((req, res, next) => {
 });
 
 /* =====================================================
-   BOT BLOCKING (SAFE LIST)
+   BOT BLOCKING
 ===================================================== */
 const blockedBots = [
-  "bot",
-  "crawl",
-  "spider",
-  "slurp",
-  "bingpreview",
-  "ahrefs",
-  "semrush",
-  "facebookexternalhit",
-  "python-requests",
-  "curl",
-  "wget",
-  "headless"
+  "bot","crawl","spider","slurp","bing","ahrefs","semrush",
+  "facebookexternalhit","python-requests","curl","wget",
+  "java","headless","node"
 ];
 
 app.use((req, res, next) => {
@@ -81,16 +63,14 @@ const ALLOWED_ORIGIN = "https://joynhappy.shop";
 
 app.use((req, res, next) => {
 
-  // Always allow static assets
+  // Always allow static files
   if (
+    req.path.startsWith("/css/") ||
+    req.path.startsWith("/js/") ||
+    req.path.startsWith("/images/") ||
+    req.path.endsWith(".mp4") ||
     req.path === "/" ||
-    req.path.endsWith(".html") ||
-    req.path.endsWith(".css") ||
-    req.path.endsWith(".js") ||
-    req.path.endsWith(".png") ||
-    req.path.endsWith(".jpg") ||
-    req.path.endsWith(".svg") ||
-    req.path.endsWith(".mp4")
+    req.path.endsWith("index.html")
   ) {
     return next();
   }
@@ -98,10 +78,15 @@ app.use((req, res, next) => {
   // Allow frontend-loader API
   if (req.path === "/frontend-loader") return next();
 
-  const referer = req.headers.referer || "";
+  const referer = (req.headers.referer || "").toLowerCase();
 
-  // Allow requests coming from main site
-  if (referer.startsWith(ALLOWED_ORIGIN)) return next();
+  // Allow only if request comes from your main site
+  if (referer.startsWith(ALLOWED_ORIGIN.toLowerCase())) return next();
+
+  // Block direct access
+  if (req.query.loader === "true") {
+    return res.status(403).send("Direct loader access blocked");
+  }
 
   return res.status(403).send("Direct access not allowed");
 });
@@ -110,7 +95,7 @@ app.use((req, res, next) => {
    FRONTEND LOADER API
 ===================================================== */
 app.get("/frontend-loader", (req, res) => {
-  res.json({ allowed: true });
+  return res.json({ allowed: true });
 });
 
 /* =====================================================
@@ -118,9 +103,6 @@ app.get("/frontend-loader", (req, res) => {
 ===================================================== */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* =====================================================
-   SPA FALLBACK
-===================================================== */
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -129,7 +111,13 @@ app.get("*", (req, res) => {
    START SERVER
 ===================================================== */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log("🚀 Server running on port " + PORT));
+
+
+
+
+
+
+
+
 

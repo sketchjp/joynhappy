@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-  origin: "https://mingletap.shop",
+  origin: "https://joynhappy.shop",
   methods: ["GET", "POST"],
   credentials: true
 }));
@@ -25,7 +25,7 @@ const __dirname = path.dirname(__filename);
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
-    "frame-ancestors https://mingletap.shop *"
+    "frame-ancestors https://joynhappy.shop *"
   );
   next();
 });
@@ -77,7 +77,7 @@ app.use((req, res, next) => {
 /* =====================================================
    ACCESS CONTROL
 ===================================================== */
-const ALLOWED_ORIGIN = "https://mingletap.shop";
+const ALLOWED_ORIGIN = "https://joynhappy.shop";
 
 app.use((req, res, next) => {
 
@@ -132,3 +132,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+

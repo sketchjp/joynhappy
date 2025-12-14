@@ -4,33 +4,42 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const app = express();
-app.use(cors());
+
+/* =====================================================
+   BASIC SETUP
+===================================================== */
 app.use(express.json());
+
+app.use(cors({
+  origin: "https://mingletap.shop",
+  methods: ["GET", "POST"],
+  credentials: true
+}));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /* =====================================================
-   ALLOW IFRAME EMBEDDING
+   IFRAME ALLOW (CSP ONLY – CORRECT WAY)
 ===================================================== */
 app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "ALLOWALL");
-  res.setHeader("Content-Security-Policy", "frame-ancestors *");
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors https://mingletap.shop *"
+  );
   next();
 });
 
 /* =====================================================
    COUNTRY BLOCK (CLOUDFLARE)
 ===================================================== */
-const ALLOWED_COUNTRIES = ["JP"]; // Allow JP + yourself for testing
+const ALLOWED_COUNTRIES = ["JP"];
 
 app.use((req, res, next) => {
-  const country = (req.headers["cf-ipcountry"] || "UNKNOWN").toUpperCase();
+  const country = (req.headers["cf-ipcountry"] || "").toUpperCase();
 
-  if (country === "UNKNOWN") {
-    console.log("⚠️ Cloudflare country header missing → allowing request.");
-    return next();
-  }
+  // Allow if Cloudflare header missing (local / test)
+  if (!country) return next();
 
   if (!ALLOWED_COUNTRIES.includes(country)) {
     return res.status(403).send("Access blocked by country");
@@ -40,12 +49,21 @@ app.use((req, res, next) => {
 });
 
 /* =====================================================
-   BOT BLOCKING
+   BOT BLOCKING (SAFE LIST)
 ===================================================== */
 const blockedBots = [
-  "bot","crawl","spider","slurp","bing","ahrefs","semrush",
-  "facebookexternalhit","python-requests","curl","wget",
-  "java","headless","node"
+  "bot",
+  "crawl",
+  "spider",
+  "slurp",
+  "bingpreview",
+  "ahrefs",
+  "semrush",
+  "facebookexternalhit",
+  "python-requests",
+  "curl",
+  "wget",
+  "headless"
 ];
 
 app.use((req, res, next) => {
@@ -59,18 +77,20 @@ app.use((req, res, next) => {
 /* =====================================================
    ACCESS CONTROL
 ===================================================== */
-const ALLOWED_ORIGIN = "https://joynhappy.shop";
+const ALLOWED_ORIGIN = "https://mingletap.shop";
 
 app.use((req, res, next) => {
 
-  // Always allow static files
+  // Always allow static assets
   if (
-    req.path.startsWith("/css/") ||
-    req.path.startsWith("/js/") ||
-    req.path.startsWith("/images/") ||
-    req.path.endsWith(".mp4") ||
     req.path === "/" ||
-    req.path.endsWith("index.html")
+    req.path.endsWith(".html") ||
+    req.path.endsWith(".css") ||
+    req.path.endsWith(".js") ||
+    req.path.endsWith(".png") ||
+    req.path.endsWith(".jpg") ||
+    req.path.endsWith(".svg") ||
+    req.path.endsWith(".mp4")
   ) {
     return next();
   }
@@ -78,15 +98,10 @@ app.use((req, res, next) => {
   // Allow frontend-loader API
   if (req.path === "/frontend-loader") return next();
 
-  const referer = (req.headers.referer || "").toLowerCase();
+  const referer = req.headers.referer || "";
 
-  // Allow only if request comes from your main site
-  if (referer.startsWith(ALLOWED_ORIGIN.toLowerCase())) return next();
-
-  // Block direct access
-  if (req.query.loader === "true") {
-    return res.status(403).send("Direct loader access blocked");
-  }
+  // Allow requests coming from main site
+  if (referer.startsWith(ALLOWED_ORIGIN)) return next();
 
   return res.status(403).send("Direct access not allowed");
 });
@@ -95,7 +110,7 @@ app.use((req, res, next) => {
    FRONTEND LOADER API
 ===================================================== */
 app.get("/frontend-loader", (req, res) => {
-  return res.json({ allowed: true });
+  res.json({ allowed: true });
 });
 
 /* =====================================================
@@ -103,6 +118,9 @@ app.get("/frontend-loader", (req, res) => {
 ===================================================== */
 app.use(express.static(path.join(__dirname, "public")));
 
+/* =====================================================
+   SPA FALLBACK
+===================================================== */
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -111,13 +129,6 @@ app.get("*", (req, res) => {
    START SERVER
 ===================================================== */
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("🚀 Server running on port " + PORT));
-
-
-
-
-
-
-
-
-
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
